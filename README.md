@@ -24,6 +24,7 @@ By utilizing **OpenCV** and **NumPy**, the script divides high-resolution (1024x
 2. Run the script:
    ```bash
    python main.py
-   <img width="1638" height="2048" alt="Trump" src="https://github.com/user-attachments/assets/e95a2624-de66-4260-8783-140bd2bac349" />
+
+<img width="1638" height="2048" alt="Trump" src="https://github.com/user-attachments/assets/e95a2624-de66-4260-8783-140bd2bac349" />
 <img width="828" height="795" alt="스크린샷 2026-05-16 17 25 26" src="https://github.com/user-attachments/assets/c3cd4643-746d-4bc4-a554-3e54a76cf0ec" />
 <img width="828" height="795" alt="스크린샷 2026-05-16 17 25 13" src="https://github.com/user-attachments/assets/4fdd45c0-9566-496a-9109-885571cd2a0e" />
