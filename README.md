@@ -105,3 +105,8 @@ P_{\text{src}}(k)\,(1-E(\tau))
 P_{\text{tgt}}(k)\,E(\tau)
 \right]
 $$
+
+
+https://en.wikipedia.org/wiki/Smoothstep
+https://en.wikipedia.org/wiki/Linear_interpolation
+https://en.wikipedia.org/wiki/Bijection
