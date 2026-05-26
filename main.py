@@ -1,138 +1,156 @@
 import cv2
-import numpy as np
+import gradio as gr
+from morph_engine import (
+    crop_and_resize,
+    rearrange_pixels,
+    animate_perfect_morph,
+    rearrange_pixels_lexsort,
+    animate_lexsort_morph,
+    rearrange_pixels_hsv,
+    animate_hsv_morph,
+    rearrange_pixels_pca,
+    animate_pca_morph,
+    rearrange_pixels_sobel,  # <-- Algorithm 5 Import
+    animate_sobel_morph  # <-- Algorithm 5 Import
+)
 
 
-def crop_and_resize(image, target_size=(1024, 1024)):
-    """이미지 비율 왜곡 없이 중앙을 자르고 크기를 맞춘다."""
-    h, w = image.shape[:2]
-    size = min(h, w)
-    y1, y2 = (h - size) // 2, (h + size) // 2
-    x1, x2 = (w - size) // 2, (w + size) // 2
+def process_morph(source_img, target_img, resolution_size, num_frames, algorithm_choice):
+    fps = 60
 
-    cropped = image[y1:y2, x1:x2]
-    return cv2.resize(cropped, target_size, interpolation=cv2.INTER_AREA)
+    if source_img is None or target_img is None:
+        raise gr.Error("Please upload both a Source and Target image.")
+
+    target_size = (resolution_size, resolution_size)
+
+    # 1. Color Conversion
+    if source_img.shape[-1] == 4:
+        source_bgr = cv2.cvtColor(source_img, cv2.COLOR_RGBA2BGR)
+    else:
+        source_bgr = cv2.cvtColor(source_img, cv2.COLOR_RGB2BGR)
+
+    if target_img.shape[-1] == 4:
+        target_bgr = cv2.cvtColor(target_img, cv2.COLOR_RGBA2BGR)
+    else:
+        target_bgr = cv2.cvtColor(target_img, cv2.COLOR_RGB2BGR)
+
+    src_bgr = crop_and_resize(source_bgr, target_size)
+    tgt_bgr = crop_and_resize(target_bgr, target_size)
+    output_video_path = "web_morph_output.mp4"
+
+    # 2. Routing Logic & Dynamic Explanations
+    if algorithm_choice == "Algorithm 5: Sobel Edge-Mapping Sort (Computer Vision)":
+        static_bgr = rearrange_pixels_sobel(src_bgr, tgt_bgr)
+        animate_sobel_morph(src_bgr, tgt_bgr, output_video_path, num_frames, fps)
+        explanation = """
+        ### 🔪 How it Works: Sobel Edge-Mapping Sort
+        This algorithm introduces **Convolutional Spatial Filtering**. It uses a Sobel Operator (a core computer vision edge-detection filter) to calculate the spatial gradient and find all high-contrast edges in the Target image.
+        It then sorts the Target image by edge magnitude and sorts the Source image by brightness. 
+
+        **The Result:** The absolute brightest pixels of the source map directly onto the strongest edges of the target, while dark pixels fill the flat backgrounds. It creates a spectacular glowing outline effect.
+        """
+
+    elif algorithm_choice == "Algorithm 4: PCA Projection Sort (Dynamic)":
+        static_bgr = rearrange_pixels_pca(src_bgr, tgt_bgr)
+        animate_pca_morph(src_bgr, tgt_bgr, output_video_path, num_frames, fps)
+        explanation = """
+        ### 📊 How it Works: Principal Component Analysis (PCA)
+        This algorithm analyzes the specific data of the images uploaded. 
+        It calculates the **Covariance Matrix** of all RGB pixels to find an **Eigenvector** that represents the axis of maximum color variance. It then uses a dot product to project every 3D pixel onto this custom 1D line for sorting.
+
+        **The Result:** A dynamically adapted color sort that shifts completely depending on the specific palettes of the uploaded images.
+        """
+
+    elif algorithm_choice == "Algorithm 3: Perceptual Color Sort (HSV Space)":
+        static_bgr = rearrange_pixels_hsv(src_bgr, tgt_bgr)
+        animate_hsv_morph(src_bgr, tgt_bgr, output_video_path, num_frames, fps)
+        explanation = """
+        ### 🧠 How it Works: Perceptual Color Sort (HSV Space)
+        This algorithm converts the images into **HSV (Hue, Saturation, Value)**. 
+        It sorts the pixels exactly how the human eye perceives light: matching absolute brightness, breaking ties with color saturation, and breaking final ties with exact color hue.
+
+        **The Result:** A perfectly smooth 1-to-1 mapping that maintains stunning color distribution and highly realistic lighting.
+        """
+
+    elif algorithm_choice == "Algorithm 2: 3D Color Match (RGB Lexicographical)":
+        static_bgr = rearrange_pixels_lexsort(src_bgr, tgt_bgr)
+        animate_lexsort_morph(src_bgr, tgt_bgr, output_video_path, num_frames, fps)
+        explanation = """
+        ### 🟥🟩🟦 How it Works: 3D Color Match (RGB Lexicographical)
+        This algorithm uses a **Lexicographical Sort** (like alphabetical order) on the raw pixel data. It ranks every pixel from lowest to highest based on Blue, then breaks ties with Green, and finally Red.
+
+        **The Result:** Full color retention, but because computers process RGB linearly while humans do not, the final image features a highly artistic, "glitchy" mosaic texture.
+        """
+
+    else:
+        tgt_gray = cv2.cvtColor(tgt_bgr, cv2.COLOR_BGR2GRAY)
+        static_bgr = rearrange_pixels(src_bgr, tgt_gray)
+        animate_perfect_morph(src_bgr, tgt_bgr, output_video_path, num_frames, fps)
+        explanation = """
+        ### 🌗 How it Works: 1D Brightness Sort (Standard)
+        This is the foundational algorithm. It flattens the target image into 1D grayscale to create a strict "Luminance Map." 
+        It then finds the absolute darkest pixel in the source image and assigns it to the absolute darkest spot in the target layout, proceeding up to the brightest white.
+
+        **The Result:** A perfectly smooth shape reconstruction that acts like a monochromatic "tint" or "color filter."
+        """
+
+    # 3. Output Translation
+    src_rgb = cv2.cvtColor(src_bgr, cv2.COLOR_BGR2RGB)
+    tgt_rgb = cv2.cvtColor(tgt_bgr, cv2.COLOR_BGR2RGB)
+    static_rgb = cv2.cvtColor(static_bgr, cv2.COLOR_BGR2RGB)
+
+    gallery_images = [
+        (src_rgb, "1. Source Image"),
+        (tgt_rgb, "2. Target Image"),
+        (static_rgb, "3. Final Static Result")
+    ]
+
+    return gallery_images, output_video_path, explanation
 
 
-def prepare_image(image_path, target_size=(1024, 1024)):
-    """이미지를 불러와 중앙을 자르고 해상도를 맞춘다."""
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError(f"Error: 파일 확인 필요 - '{image_path}'")
+# ==========================================
+# Gradio UI Layout Definition
+# ==========================================
+with gr.Blocks(theme=gr.themes.Soft()) as ui:
+    gr.Markdown("# 🎨 PixelMorph Animator (Master Edition)")
+    gr.Markdown(
+        "Upload two images and select an algorithm. The pixels from the **Source Image** will be reorganized to form the **Target Image**.")
 
-    return crop_and_resize(image, target_size)
+    with gr.Row():
+        source_input = gr.Image(label="Source Image (Pixels)", type="numpy")
+        target_input = gr.Image(label="Target Image (Shape)", type="numpy")
 
+    with gr.Row():
+        res_slider = gr.Slider(minimum=256, maximum=1024, value=512, step=256, label="Resolution Size (Pixels)")
+        frames_slider = gr.Slider(minimum=60, maximum=300, value=120, step=30, label="Animation Frames")
 
-def ease_in_out(t):
-    """애니메이션 속도를 부드럽게 조절한다."""
-    return t * t * (3.0 - 2.0 * t)
+        algo_dropdown = gr.Dropdown(
+            choices=[
+                "Algorithm 5: Sobel Edge-Mapping Sort (Computer Vision)",
+                "Algorithm 4: PCA Projection Sort (Dynamic)",
+                "Algorithm 3: Perceptual Color Sort (HSV Space)",
+                "Algorithm 2: 3D Color Match (RGB Lexicographical)",
+                "Algorithm 1: 1D Brightness Sort (Standard)"
+            ],
+            value="Algorithm 5: Sobel Edge-Mapping Sort (Computer Vision)",
+            label="Mapping Algorithm"
+        )
 
+    run_btn = gr.Button("Morph Images!", variant="primary")
 
-def animate_premium(source_color_img, target_color_img, output_filename='premium_morph.mp4', num_frames=180, fps=60,
-                    block_size=32):
-    """고해상도 및 부드러운 애니메이션을 생성한다."""
-    h, w, _ = source_color_img.shape
-    num_blocks_y, num_blocks_x = h // block_size, w // block_size
+    explanation_box = gr.Markdown(
+        "### Algorithm Explanation\n*Run the morph to see how your selected algorithm works!*")
 
-    source_gray = cv2.cvtColor(source_color_img, cv2.COLOR_BGR2GRAY)
-    target_gray = cv2.cvtColor(target_color_img, cv2.COLOR_BGR2GRAY)
+    gr.Markdown("### Results")
+    image_gallery = gr.Gallery(label="Image Processing Pipeline", columns=3, rows=1, height="auto")
+    video_output = gr.Video(label="Morphing Animation Video")
 
-    s_blocks = []
-    t_blocks = []
-    for by in range(num_blocks_y):
-        for bx in range(num_blocks_x):
-            sy1, sy2 = by * block_size, (by + 1) * block_size
-            sx1, sx2 = bx * block_size, (bx + 1) * block_size
-
-            s_mean = source_color_img[sy1:sy2, sx1:sx2].mean(axis=(0, 1))
-            t_mean = target_color_img[sy1:sy2, sx1:sx2].mean(axis=(0, 1))
-
-            s_blocks.append({'idx': (by, bx), 'mean': s_mean})
-            t_blocks.append({'idx': (by, bx), 'mean': t_mean})
-
-    matched_s = set()
-    pairs = []
-    for t in t_blocks:
-        best_dist = float('inf')
-        best_s = None
-        for s in s_blocks:
-            if s['idx'] in matched_s:
-                continue
-            dist = np.linalg.norm(t['mean'] - s['mean'])
-            if dist < best_dist:
-                best_dist = dist
-                best_s = s
-        matched_s.add(best_s['idx'])
-        pairs.append((best_s['idx'], t['idx']))
-
-    grid_indices = np.arange(h * w).reshape(h, w)
-    s_indices = []
-    t_indices = []
-
-    for s_idx, t_idx in pairs:
-        sby, sbx = s_idx
-        tby, tbx = t_idx
-
-        sy1, sy2 = sby * block_size, (sby + 1) * block_size
-        sx1, sx2 = sbx * block_size, (sbx + 1) * block_size
-        ty1, ty2 = tby * block_size, (tby + 1) * block_size
-        tx1, tx2 = tbx * block_size, (tbx + 1) * block_size
-
-        s_flat = grid_indices[sy1:sy2, sx1:sx2].flatten()
-        t_flat = grid_indices[ty1:ty2, tx1:tx2].flatten()
-
-        s_g = source_gray[sy1:sy2, sx1:sx2].flatten()
-        t_g = target_gray[ty1:ty2, tx1:tx2].flatten()
-
-        s_indices.extend(s_flat[np.argsort(s_g)])
-        t_indices.extend(t_flat[np.argsort(t_g)])
-
-    source_sort_indices = np.array(s_indices)
-    target_sort_indices = np.array(t_indices)
-    source_color_flat = source_color_img.reshape(-1, 3)
-
-    start_y = source_sort_indices // w
-    start_x = source_sort_indices % w
-    end_y = target_sort_indices // w
-    end_x = target_sort_indices % w
-
-    colors = source_color_flat[source_sort_indices]
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_filename, fourcc, fps, (w, h))
-
-    print(f"Generating {num_frames} frames at {fps} FPS...")
-
-    for frame_idx in range(num_frames):
-        t = frame_idx / (num_frames - 1)
-        smooth_t = ease_in_out(t)
-
-        cur_y = (start_y * (1 - smooth_t) + end_y * smooth_t).astype(np.int32)
-        cur_x = (start_x * (1 - smooth_t) + end_x * smooth_t).astype(np.int32)
-
-        frame = np.zeros((h, w, 3), dtype=np.uint8)
-        frame[cur_y, cur_x] = colors
-        out.write(frame)
-
-        if frame_idx % 20 == 0:
-            print(f"Rendered frame {frame_idx}/{num_frames}")
-
-    print("Holding final image for 2 seconds...")
-    final_frame = np.zeros((h, w, 3), dtype=np.uint8)
-    final_frame[end_y, end_x] = colors
-    for _ in range(fps * 2):
-        out.write(final_frame)
-
-    out.release()
-    print(f"Animation saved to {output_filename}!")
-
+    run_btn.click(
+        fn=process_morph,
+        inputs=[source_input, target_input, res_slider, frames_slider, algo_dropdown],
+        outputs=[image_gallery, video_output, explanation_box],
+        api_name=False
+    )
 
 if __name__ == "__main__":
-    TARGET_FILE = 'Trump.jpg'
-    SOURCE_FILE = 'random.jpg'
-    OUTPUT_VIDEO = 'premium_morph.mp4'
-
-    print("고해상도 이미지 전처리 중...")
-    target_img = prepare_image(TARGET_FILE, target_size=(1024, 1024))
-    source_img = prepare_image(SOURCE_FILE, target_size=(1024, 1024))
-
-    animate_premium(source_img, target_img, output_filename=OUTPUT_VIDEO, num_frames=180, fps=60, block_size=32)
+    ui.launch(share=True)
