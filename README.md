@@ -100,7 +100,7 @@ Training runs on **CPU or CUDA** automatically. Checkpoints are not saved; each 
 
 ### Relation to the published method
 
-The IEEE paper describes maximizing **mutual information** between the shuffled style and content via a simple pixel-shuffle formulation. This coursework project follows the **same high-level goal** (structure from content, appearance from style) using a **differentiable warp + U-Net + LPIPS/Gram** setup that is practical to implement in PyTorch. It is **not** a line-by-line port of the [official repository](https://github.com/OmarSZamzam/PixelShuffler).
+The IEEE paper describes maximizing **mutual information** between the shuffled style and content via a simple pixel-shuffle formulation. This coursework project follows the **same high-level goal** (structure from content, appearance from style) using a **differentiable warp + U-Net + LPIPS/Gram** setup that is practical to implement in PyTorch. 
 
 ---
 
