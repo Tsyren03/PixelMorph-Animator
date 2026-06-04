@@ -290,4 +290,4 @@ Outputs: `output/` (gitignored).
 ├── morph.py
 └── io_utils.py
 ```
-## Used Gemini and Cursor
+###P.S: Used Gemini and Cursor
