@@ -38,35 +38,35 @@ flowchart LR
 
 **Step-by-step (each training iteration):**
 
-1. **Preprocess** — Both images are resized and center-cropped to 256×256, converted to tensors, and normalized to roughly \([-1, 1]\).
+1. **Preprocess** — Both images are resized and center-cropped to 256×256, converted to tensors, and normalized to roughly $[-1, 1]$.
 
-2. **Predict deformation** — A U-Net takes the **concatenated** content and style (6 channels) and outputs a **2-channel displacement field** \(\Delta(x, y)\), bounded with `tanh` so warps stay moderate.
+2. **Predict deformation** — A U-Net takes the **concatenated** content and style (6 channels) and outputs a **2-channel displacement field** $\Delta(x, y)$, bounded with `tanh` so warps stay moderate.
 
-3. **Warp the style image** — Differentiable **`grid_sample`** builds a sampling grid: each output coordinate looks up a location in the style image offset by \(\alpha \cdot \Delta\). At \(\alpha = 0\) you get the original style; at \(\alpha = 1\) you get the fully warped result. This is the **pixel rearrangement** step.
+3. **Warp the style image** — Differentiable **`grid_sample`** builds a sampling grid: each output coordinate looks up a location in the style image offset by $\alpha \cdot \Delta$. At $\alpha = 0$ you get the original style; at $\alpha = 1$ you get the fully warped result. This is the **pixel rearrangement** step.
 
 4. **Compute losses** on the warped image:
    - **Content (LPIPS)** — Penalizes perceptual distance to the content image so structure aligns.
    - **Style (VGG Gram)** — Compares Gram matrices of VGG19 feature maps to the **unwarped** style, preserving global color/texture statistics.
-   - **Total variation (TV)** — Penalizes sharp jumps in \(\Delta\) to reduce tearing and blocky artifacts.
+   - **Total variation (TV)** — Penalizes sharp jumps in $\Delta$ to reduce tearing and blocky artifacts.
 
 5. **Optimize** — Adam updates **only the U-Net weights** (VGG and LPIPS are frozen). After hundreds–thousands of steps, the warped style is the final stylized image.
 
-6. **Morph animation** — For visualization, the same field is applied with \(\alpha\) smoothly increasing from 0 to 1 (smoothstep easing), producing a GIF of pixels “sliding” into place.
+6. **Morph animation** — For visualization, the same field is applied with $\alpha$ smoothly increasing from 0 to 1 (smoothstep easing), producing a GIF of pixels “sliding” into place.
 
 **Combined loss:**
 
-\[
-\mathcal{L} = \lambda_c \mathcal{L}_{\text{LPIPS}} + \lambda_s \mathcal{L}_{\text{Gram}} + \lambda_{tv} \mathcal{L}_{\text{TV}}
-\]
+$$
+\mathcal{L} = \lambda_c \, \mathcal{L}_{\mathrm{LPIPS}} + \lambda_s \, \mathcal{L}_{\mathrm{Gram}} + \lambda_{\mathrm{tv}} \, \mathcal{L}_{\mathrm{TV}}
+$$
 
-Default weights in this repo: \(\lambda_c = 15\), \(\lambda_s = 800\), \(\lambda_{tv} = 5\), learning rate \(3 \times 10^{-3}\).
+**Default weights:** $\lambda_c = 15$, $\lambda_s = 800$, $\lambda_{\mathrm{tv}} = 5$, learning rate $3 \times 10^{-3}$.
 
 ### What each input means
 
 | Input | Role in the app | Used for |
 |-------|-----------------|----------|
 | **Content** | Structure target | LPIPS pulls the warped style toward this layout |
-| **Style** | Appearance source | Warped with \(\Delta\); Gram loss keeps its look |
+| **Style** | Appearance source | Warped with $\Delta$; Gram loss keeps its look |
 
 The network never paints new colors—it **only moves** style pixels. That is why pairing matters: if content is a face and style is a waterfall, no smooth warp can produce a sensible face.
 
@@ -111,7 +111,9 @@ The IEEE paper describes maximizing **mutual information** between the shuffled 
 
 Main window (load Content / Style, parameters, Run, play morph).
 
-![Application main window](docs/screenshots/app_main.jpeg)
+<p align="center">
+  <img src="docs/screenshots/app_main.jpeg" width="320" alt="Application main window" />
+</p>
 
 *Caption: Pixel Shuffler desktop UI — content & style inputs, live preview, morph controls.*
 
@@ -121,20 +123,28 @@ Main window (load Content / Style, parameters, Run, play morph).
 
 **When this works:** Content and style have **similar composition and main shapes**, with clear subjects (e.g., architecture ↔ architecture, portrait ↔ portrait).
 
-| | |
-|---|---|
-| Content | Style |
-| ![Good content](docs/examples/good/content.jpeg) | ![Good style](docs/examples/good/style.jpeg) |
+<table>
+  <tr>
+    <td align="center"><b>Content</b><br>
+      <img src="docs/examples/good/content.jpeg" width="320" alt="Good — content" />
+    </td>
+    <td align="center"><b>Style</b><br>
+      <img src="docs/examples/good/style.jpeg" width="320" alt="Good — style" />
+    </td>
+  </tr>
+</table>
 
 **Result**
 
-
-![Good result](docs/examples/good/result.png)
+<p align="center">
+  <img src="docs/examples/good/result.png" width="320" alt="Good — result" />
+</p>
 
 **Morph animation (GIF)**
 
-
-![Good morph](docs/examples/good/morph.gif)
+<p align="center">
+  <img src="docs/examples/good/morph.gif" width="320" alt="Good — morph animation" />
+</p>
 
 *Caption: Style pixels rearrange toward content structure; colors and textures from the style remain plausible.*
 
@@ -144,20 +154,28 @@ Main window (load Content / Style, parameters, Run, play morph).
 
 **When this fails:** Image pairs with **different structure** (e.g., face as content + landscape as style), **high-frequency or random** style textures, or TV weight set too low.
 
-| | |
-|---|---|
-| Content | Style |
-| ![Bad content](docs/examples/bad/content.jpg) | ![Bad style](docs/examples/bad/style.jpeg) |
+<table>
+  <tr>
+    <td align="center"><b>Content</b><br>
+      <img src="docs/examples/bad/content.jpg" width="320" alt="Bad — content" />
+    </td>
+    <td align="center"><b>Style</b><br>
+      <img src="docs/examples/bad/style.jpeg" width="320" alt="Bad — style" />
+    </td>
+  </tr>
+</table>
 
 **Result**
 
-
-![Bad result](docs/examples/bad/result.jpeg)
+<p align="center">
+  <img src="docs/examples/bad/result.jpeg" width="320" alt="Bad — result" />
+</p>
 
 **Morph animation (GIF)**
 
-
-![Bad morph](docs/examples/bad/morph.gif)
+<p align="center">
+  <img src="docs/examples/bad/morph.gif" width="320" alt="Bad — morph animation" />
+</p>
 
 *Caption: Tearing, ghosting, or loss of recognizable structure — method limits are visible.*
 
@@ -170,7 +188,7 @@ Main window (load Content / Style, parameters, Run, play morph).
 1. **Aligned structure** — Content and style share a similar layout (e.g., both frontal portraits, both skyline/architecture). The deformation field can map regions without extreme stretching.
 2. **Clear subjects** — Distinct foreground vs. background; not extremely cluttered. LPIPS can match structure; Gram loss preserves style statistics.
 3. **Moderate resolution (256×256)** — Training is stable with the default crop; TV regularization keeps the field smooth.
-4. **Balanced loss weights** — Defaults (content 15, style 800, TV 5) balance structure vs. appearance; morph interpolation (α: 0→1) gives a smooth pixel-shuffle visualization.
+4. **Balanced loss weights** — Defaults (content 15, style 800, TV 5) balance structure vs. appearance; morph interpolation ($\alpha$: 0→1) gives a smooth pixel-shuffle visualization.
 5. **Desktop workflow** — PyQt6 GUI supports interactive tuning, live preview, and GIF export without a browser.
 
 ### Weaknesses (works poorly)
