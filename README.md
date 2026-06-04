@@ -290,4 +290,4 @@ Outputs: `output/` (gitignored).
 ├── morph.py
 └── io_utils.py
 ```
-](https://github.com/Tsyren03/PixelMorph-Animator)
+## Used Gemini and Cursor
