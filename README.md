@@ -1,112 +1,270 @@
-# PixelMorph Animator
+# Pixel Shuffler — Image Translation Desktop Application
 
-## Project Description
-**PixelMorph Animator** is a Python-based computer vision project that creates a smooth, visually captivating morphing animation between two different images. Inspired by pixel-rearranging art, this program does not simply crossfade one image into another. Instead, it intelligently maps and visually moves the pixels from a source image to reconstruct the layout of a target image.
-
-By utilizing **OpenCV** and **NumPy**, the script divides high-resolution (1024x1024) images into blocks, calculates the mean colors, and pairs them using Euclidean distance. The resulting pixel transition is rendered at 60 FPS using an ease-in-out algorithm, generating a premium, high-quality video output (`.mp4`).
-
-Inspiration video:
-https://www.youtube.com/shorts/MeFi68a2pP8
-
-## Key Features
-* **Smart Block Matching:** Intelligently maps pixels by comparing the color similarity (mean RGB values) between source and target image blocks.
-* **Smooth Animation:** Implements an `ease_in_out` mathematical function to ensure the pixel movement starts and ends naturally.
-* **High-Resolution Processing:** Automatically crops and resizes input images without distortion, maintaining a 1024x1024 aspect ratio for crisp results.
-
-<img width="828" height="795" alt="Trump" src="https://github.com/user-attachments/assets/e95a2624-de66-4260-8783-140bd2bac349" />
-<img width="828" height="795" alt="스크린샷 2026-05-16 17 25 13" src="https://github.com/user-attachments/assets/4fdd45c0-9566-496a-9109-885571cd2a0e" />
-<img width="828" height="795" alt="스크린샷 2026-05-16 17 25 26" src="https://github.com/user-attachments/assets/c3cd4643-746d-4bc4-a554-3e54a76cf0ec" />
-# Mathematical Model: The "Perfect Morph" Algorithm
-
-The core logic of the `animate_perfect_morph` function can be defined as a bijective spatial mapping driven by luminance sorting and interpolated via a smooth kinematic function.
+Implementation inspired by the ICIP 2025 paper [*PixelShuffler: A Simple Image Translation through Pixel Rearrangement*](https://ieeexplore.ieee.org/document/11084515).  
+PyQt6 desktop app: load **content** (structure) + **style** (appearance) → optimize a deformation field → preview result and **morph animation**.
 
 ---
 
-## 1. Definitions and Setup
+## How the project works
 
-Let \( I_{\text{src}} \) be the source color image and \( I_{\text{tgt}} \) be the target grayscale image.
+### Idea (from the paper)
 
-Both images share the exact same dimensions, containing a total of:
+Classic **style transfer** asks: *how can we combine the layout of one image with the look of another?*  
+The PixelShuffler paper proposes doing this by **rearranging pixels** of the **style** image instead of generating new pixels from scratch. Each output pixel still comes from the style image’s color information, but it is **read from a warped location** chosen so that the final image:
 
-$$
-N = H \times W
-$$
+- **Matches the content image’s structure** (edges, object layout)
+- **Keeps the style image’s appearance** (color distribution, texture statistics)
 
-pixels.
+This project implements that idea with a **learned deformation field**: a small neural network predicts *where* to sample each pixel from the style image, and gradient descent adjusts that field until perceptual losses are satisfied.
 
-Let \( Y_{\text{src}} \) and \( Y_{\text{tgt}} \) represent one-dimensional sets containing the luminance values of every pixel:
+### Algorithm pipeline
 
-$$
-Y_{\text{src}} = \{ y_1, y_2, \dots, y_N \}
-$$
+```mermaid
+flowchart LR
+  A[Content image] --> C[Deformation U-Net]
+  B[Style image] --> C
+  C --> D[2D flow field Δ]
+  B --> E[grid_sample warp]
+  D --> E
+  E --> F[Warped style = output]
+  G[Content loss LPIPS] --> H[Total loss]
+  I[Style loss VGG Gram] --> H
+  J[TV loss on Δ] --> H
+  F --> G
+  F --> I
+  D --> J
+  H --> C
+```
 
-$$
-Y_{\text{tgt}} = \{ y_1, y_2, \dots, y_N \}
-$$
+**Step-by-step (each training iteration):**
+
+1. **Preprocess** — Both images are resized and center-cropped to 256×256, converted to tensors, and normalized to roughly \([-1, 1]\).
+
+2. **Predict deformation** — A U-Net takes the **concatenated** content and style (6 channels) and outputs a **2-channel displacement field** \(\Delta(x, y)\), bounded with `tanh` so warps stay moderate.
+
+3. **Warp the style image** — Differentiable **`grid_sample`** builds a sampling grid: each output coordinate looks up a location in the style image offset by \(\alpha \cdot \Delta\). At \(\alpha = 0\) you get the original style; at \(\alpha = 1\) you get the fully warped result. This is the **pixel rearrangement** step.
+
+4. **Compute losses** on the warped image:
+   - **Content (LPIPS)** — Penalizes perceptual distance to the content image so structure aligns.
+   - **Style (VGG Gram)** — Compares Gram matrices of VGG19 feature maps to the **unwarped** style, preserving global color/texture statistics.
+   - **Total variation (TV)** — Penalizes sharp jumps in \(\Delta\) to reduce tearing and blocky artifacts.
+
+5. **Optimize** — Adam updates **only the U-Net weights** (VGG and LPIPS are frozen). After hundreds–thousands of steps, the warped style is the final stylized image.
+
+6. **Morph animation** — For visualization, the same field is applied with \(\alpha\) smoothly increasing from 0 to 1 (smoothstep easing), producing a GIF of pixels “sliding” into place.
+
+**Combined loss:**
+
+\[
+\mathcal{L} = \lambda_c \mathcal{L}_{\text{LPIPS}} + \lambda_s \mathcal{L}_{\text{Gram}} + \lambda_{tv} \mathcal{L}_{\text{TV}}
+\]
+
+Default weights in this repo: \(\lambda_c = 15\), \(\lambda_s = 800\), \(\lambda_{tv} = 5\), learning rate \(3 \times 10^{-3}\).
+
+### What each input means
+
+| Input | Role in the app | Used for |
+|-------|-----------------|----------|
+| **Content** | Structure target | LPIPS pulls the warped style toward this layout |
+| **Style** | Appearance source | Warped with \(\Delta\); Gram loss keeps its look |
+
+The network never paints new colors—it **only moves** style pixels. That is why pairing matters: if content is a face and style is a waterfall, no smooth warp can produce a sensible face.
+
+### Application architecture
+
+The **desktop app** (`main.py`) wraps the training loop in a background thread so the UI stays responsive:
+
+```
+User loads images → PyQt6 previews
+       ↓
+"Run Pixel Shuffler" → PixelShufflerTrainer (pixel_shuffler/engine.py)
+       ↓
+Live preview every N iterations → main window
+       ↓
+Training done → result PNG + morph frames (pixel_shuffler/morph.py)
+       ↓
+User plays morph slider / exports GIF
+```
+
+| Module | Responsibility |
+|--------|----------------|
+| `pixel_shuffler/model.py` | U-Net + `grid_sample` warping + TV loss |
+| `pixel_shuffler/losses.py` | VGG features and Gram matrices |
+| `pixel_shuffler/engine.py` | Full optimization loop, snapshots |
+| `pixel_shuffler/morph.py` | Frame sequence for animation |
+| `pixel_shuffler/io_utils.py` | Load/save images and tensors |
+| `main.py` | PyQt6 GUI, presets, progress, export |
+| `cli.py` | Same training without GUI |
+
+Training runs on **CPU or CUDA** automatically. Checkpoints are not saved; each run optimizes a **fresh** U-Net for the current image pair (test-time optimization / image-specific fitting).
+
+### Relation to the published method
+
+The IEEE paper describes maximizing **mutual information** between the shuffled style and content via a simple pixel-shuffle formulation. This coursework project follows the **same high-level goal** (structure from content, appearance from style) using a **differentiable warp + U-Net + LPIPS/Gram** setup that is practical to implement in PyTorch. It is **not** a line-by-line port of the [official repository](https://github.com/OmarSZamzam/PixelShuffler).
 
 ---
 
-## 2. Permutation (Brightness Sorting)
+## Demo & Screenshots
 
-The algorithm computes two sorting permutations, \( \sigma_s \) and \( \sigma_t \), that arrange luminance values into strict ascending order:
 
-$$
-Y_{\text{src}}[\sigma_s(k)] \leq Y_{\text{src}}[\sigma_s(k+1)]
-$$
+### 1. Application UI
 
-$$
-Y_{\text{tgt}}[\sigma_t(k)] \leq Y_{\text{tgt}}[\sigma_t(k+1)]
-$$
+Main window (load Content / Style, parameters, Run, play morph).
 
-where:
+![Application main window](docs/screenshots/app_main.jpeg)
 
-- \( k = 1 \) corresponds to the darkest pixel
-- \( k = N \) corresponds to the brightest pixel
+*Caption: Pixel Shuffler desktop UI — content & style inputs, live preview, morph controls.*
 
 ---
 
-## 3. Bijective Spatial Mapping
+### 2. Successful result (works well)
 
-Once both luminance arrays are ordered by rank \( k \), a strict one-to-one correspondence is established.
+**When this works:** Content and style have **similar composition and main shapes**, with clear subjects (e.g., architecture ↔ architecture, portrait ↔ portrait).
 
-The pixel located at the coordinate of the \( k \)-th darkest source pixel:
+| | |
+|---|---|
+| Content | Style |
+| ![Good content](docs/examples/good/content.jpeg) | ![Good style](docs/examples/good/style.jpeg) |
 
-$$
-P_{\text{src}}(k)
-$$
+**Result**
 
-is mapped to the coordinate of the \( k \)-th darkest target pixel:
 
-$$
-P_{\text{tgt}}(k)
-$$
+![Good result](docs/examples/good/result.png)
+
+**Morph animation (GIF)**
+
+
+![Good morph](docs/examples/good/morph.gif)
+
+*Caption: Style pixels rearrange toward content structure; colors and textures from the style remain plausible.*
 
 ---
 
-## 4. Animation Kinematics
+### 3. Failure case (does not work well)
 
-Let \( \tau \in [0,1] \) represent normalized animation time.
+**When this fails:** Image pairs with **different structure** (e.g., face as content + landscape as style), **high-frequency or random** style textures, or TV weight set too low.
 
-To produce smooth motion, the algorithm applies the Smoothstep easing function:
+| | |
+|---|---|
+| Content | Style |
+| ![Bad content](docs/examples/bad/content.jpg) | ![Bad style](docs/examples/bad/style.jpeg) |
 
-$$
-E(\tau) = \tau^2 (3 - 2\tau)
-$$
-
-The position of pixel \( k \) at time \( \tau \) is then computed using linear interpolation between source and target coordinates:
-
-$$
-P(k,\tau)=
-\left[
-P_{\text{src}}(k)\,(1-E(\tau))
-\right]
-+
-\left[
-P_{\text{tgt}}(k)\,E(\tau)
-\right]
-$$
+**Result**
 
 
-https://en.wikipedia.org/wiki/Smoothstep
-https://en.wikipedia.org/wiki/Linear_interpolation
-https://en.wikipedia.org/wiki/Bijection
+![Bad result](docs/examples/bad/result.jpeg)
+
+**Morph animation (GIF)**
+
+
+![Bad morph](docs/examples/bad/morph.gif)
+
+*Caption: Tearing, ghosting, or loss of recognizable structure — method limits are visible.*
+
+---
+
+## Conclusion — When It Works vs. When It Fails
+
+### Strengths (works well)
+
+1. **Aligned structure** — Content and style share a similar layout (e.g., both frontal portraits, both skyline/architecture). The deformation field can map regions without extreme stretching.
+2. **Clear subjects** — Distinct foreground vs. background; not extremely cluttered. LPIPS can match structure; Gram loss preserves style statistics.
+3. **Moderate resolution (256×256)** — Training is stable with the default crop; TV regularization keeps the field smooth.
+4. **Balanced loss weights** — Defaults (content 15, style 800, TV 5) balance structure vs. appearance; morph interpolation (α: 0→1) gives a smooth pixel-shuffle visualization.
+5. **Desktop workflow** — PyQt6 GUI supports interactive tuning, live preview, and GIF export without a browser.
+
+### Weaknesses (works poorly)
+
+1. **Structural mismatch** — Face + landscape, object + texture-only style: pixels cannot rearrange into a coherent semantic layout; results show tearing or “melted” regions.
+2. **Heavy clutter / fine detail** — Crowds, dense foliage, or high-frequency style (food, noise) fight the smooth deformation prior; style Gram dominates structure incorrectly.
+3. **Low TV weight** — Reducing TV causes visible grid artifacts and discontinuities in the warp.
+4. **Compute cost** — Hundreds–thousands of iterations per pair; CPU-only runs are slow; the first run downloads LPIPS/VGG weights.
+5. **Fixed crop size** — Center crop to 256×256 drops context; off-center subjects may fail.
+6. **Not the official paper code** — This repo is an educational PyTorch reimplementation (U-Net + LPIPS + VGG Gram), not [OmarSZamzam/PixelShuffler](https://github.com/OmarSZamzam/PixelShuffler); results may differ from the IEEE paper.
+
+### Summary
+
+| Aspect | Works well | Works poorly |
+|--------|------------|--------------|
+| Image pairing | Similar pose / scene type | Unrelated semantics |
+| Style image | Painterly or coherent texture | Random high-frequency texture |
+| Parameters | Default or higher TV | Very low TV, extreme style weight |
+| Hardware | GPU, enough iterations | Very few iterations on CPU |
+
+---
+
+## Reference
+
+**O. Zamzam**, “PixelShuffler: A Simple Image Translation through Pixel Rearrangement,” in *2025 IEEE International Conference on Image Processing (ICIP)*, Anchorage, AK, USA, 2025, pp. 1360–1365.
+
+- **IEEE Xplore:** https://ieeexplore.ieee.org/document/11084515  
+- **Preprint:** https://arxiv.org/abs/2410.03021  
+
+```bibtex
+@inproceedings{zamzam2025pixelshuffler,
+  author       = {Zamzam, Omar},
+  title        = {{PixelShuffler}: A Simple Image Translation through Pixel Rearrangement},
+  booktitle    = {2025 IEEE International Conference on Image Processing (ICIP)},
+  pages        = {1360--1365},
+  year         = {2025},
+  organization = {IEEE},
+  url          = {https://ieeexplore.ieee.org/document/11084515}
+}
+```
+
+
+---
+
+## Requirements
+
+- Python 3.10+
+- PyTorch 2.x (CPU or CUDA)
+- See `requirements.txt`
+
+---
+
+## Installation & Run
+
+```bash
+cd "Computer Vision Project"
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+1. Click **Content** and **Style** to load images.  
+2. Choose a quality preset or adjust weights / iterations.  
+3. **Run Pixel Shuffler** → watch preview.  
+4. **Play morph** or export GIF / jpeg.
+
+**CLI (optional):**
+
+```bash
+python cli.py path/to/content.jpg path/to/style.jpg --iterations 800
+```
+
+Outputs: `output/` (gitignored).
+
+**Quick test images:** `assets/sample_content.jpeg`, `assets/sample_style.jpeg`
+
+---
+
+## Project structure
+
+```
+├── main.py                 # PyQt6 desktop app
+├── cli.py                  # Headless training
+├── requirements.txt
+├── assets/                 # Sample inputs
+├── docs/
+│   ├── screenshots/        # ← UI screenshot (app_main.jpeg)
+│   └── examples/           # ← good/, bad/, … (content, style, result, morph.gif)
+└── pixel_shuffler/
+    ├── model.py
+    ├── losses.py
+    ├── engine.py
+    ├── morph.py
+    └── io_utils.py
+```
+
