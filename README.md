@@ -1,6 +1,6 @@
 # Pixel Shuffler — Image Translation Desktop Application
 
-Implementation inspired by the ICIP 2025 paper [*PixelShuffler: A Simple Image Translation through Pixel Rearrangement*](https://ieeexplore.ieee.org/document/11084515).  
+Implementation inspired by the ICIP 2025 paper [*PixelShuffler: A Simple Image Translation through Pixel Rearrangement*](https://ieeexplore.ieee.org/document/11084515).
 PyQt6 desktop app: load **content** (structure) + **style** (appearance) → optimize a deformation field → preview result and **morph animation**.
 
 ---
@@ -9,7 +9,7 @@ PyQt6 desktop app: load **content** (structure) + **style** (appearance) → opt
 
 ### Idea (from the paper)
 
-Classic **style transfer** asks: *how can we combine the layout of one image with the look of another?*  
+Classic **style transfer** asks: *how can we combine the layout of one image with the look of another?*
 The PixelShuffler paper proposes doing this by **rearranging pixels** of the **style** image instead of generating new pixels from scratch. Each output pixel still comes from the style image’s color information, but it is **read from a warped location** chosen so that the final image:
 
 - **Matches the content image’s structure** (edges, object layout)
@@ -21,19 +21,19 @@ This project implements that idea with a **learned deformation field**: a small 
 
 ```mermaid
 flowchart LR
-  A[Content image] --> C[Deformation U-Net]
-  B[Style image] --> C
-  C --> D[2D flow field Δ]
-  B --> E[grid_sample warp]
-  D --> E
-  E --> F[Warped style = output]
-  G[Content loss LPIPS] --> H[Total loss]
-  I[Style loss VGG Gram] --> H
-  J[TV loss on Δ] --> H
-  F --> G
-  F --> I
-  D --> J
-  H --> C
+A[Content image] --> C[Deformation U-Net]
+B[Style image] --> C
+C --> D[2D flow field Δ]
+B --> E[grid_sample warp]
+D --> E
+E --> F[Warped style = output]
+G[Content loss LPIPS] --> H[Total loss]
+I[Style loss VGG Gram] --> H
+J[TV loss on Δ] --> H
+F --> G
+F --> I
+D --> J
+H --> C
 ```
 
 **Step-by-step (each training iteration):**
@@ -45,9 +45,9 @@ flowchart LR
 3. **Warp the style image** — Differentiable **`grid_sample`** builds a sampling grid: each output coordinate looks up a location in the style image offset by $\alpha \cdot \Delta$. At $\alpha = 0$ you get the original style; at $\alpha = 1$ you get the fully warped result. This is the **pixel rearrangement** step.
 
 4. **Compute losses** on the warped image:
-   - **Content (LPIPS)** — Penalizes perceptual distance to the content image so structure aligns.
-   - **Style (VGG Gram)** — Compares Gram matrices of VGG19 feature maps to the **unwarped** style, preserving global color/texture statistics.
-   - **Total variation (TV)** — Penalizes sharp jumps in $\Delta$ to reduce tearing and blocky artifacts.
+- **Content (LPIPS)** — Penalizes perceptual distance to the content image so structure aligns.
+- **Style (VGG Gram)** — Compares Gram matrices of VGG19 feature maps to the **unwarped** style, preserving global color/texture statistics.
+- **Total variation (TV)** — Penalizes sharp jumps in $\Delta$ to reduce tearing and blocky artifacts.
 
 5. **Optimize** — Adam updates **only the U-Net weights** (VGG and LPIPS are frozen). After hundreds–thousands of steps, the warped style is the final stylized image.
 
@@ -76,13 +76,13 @@ The **desktop app** (`main.py`) wraps the training loop in a background thread s
 
 ```
 User loads images → PyQt6 previews
-       ↓
+↓
 "Run Pixel Shuffler" → PixelShufflerTrainer (pixel_shuffler/engine.py)
-       ↓
+↓
 Live preview every N iterations → main window
-       ↓
+↓
 Training done → result PNG + morph frames (pixel_shuffler/morph.py)
-       ↓
+↓
 User plays morph slider / exports GIF
 ```
 
@@ -100,7 +100,9 @@ Training runs on **CPU or CUDA** automatically. Checkpoints are not saved; each 
 
 ### Relation to the published method
 
-The IEEE paper describes maximizing **mutual information** between the shuffled style and content via a simple pixel-shuffle formulation. This coursework project follows the **same high-level goal** (structure from content, appearance from style) using a **differentiable warp + U-Net + LPIPS/Gram** setup that is practical to implement in PyTorch. 
+The IEEE paper describes maximizing **mutual information** between the shuffled style and content via a simple pixel-shuffle formulation. The [official implementation](https://github.com/OmarSZamzam/PixelShuffler) uses **MONAI** (UNet + Warp) with MI, LPIPS, and a VGG mean/std style term.
+
+This coursework project pursues the **same high-level goal** (structure from content, appearance from style) but uses a **different pipeline**: a custom PyTorch U-Net, `grid_sample` warping, **LPIPS + multi-layer Gram loss + TV**, and a **PyQt6** desktop app. No source files were copied verbatim from the official repository (see [References](#references)).
 
 ---
 
@@ -112,7 +114,7 @@ The IEEE paper describes maximizing **mutual information** between the shuffled 
 Main window (load Content / Style, parameters, Run, play morph).
 
 <p align="center">
-  <img src="docs/screenshots/app_main.jpeg" width="320" alt="Application main window" />
+<img src="docs/screenshots/app_main.jpeg" width="320" alt="Application main window" />
 </p>
 
 *Caption: Pixel Shuffler desktop UI — content & style inputs, live preview, morph controls.*
@@ -124,27 +126,28 @@ Main window (load Content / Style, parameters, Run, play morph).
 **When this works:** Content and style have **similar composition and main shapes**, with clear subjects (e.g., architecture ↔ architecture, portrait ↔ portrait).
 
 <table>
-  <tr>
-    <td align="center"><b>Content</b><br>
-      <img src="docs/examples/good/content.jpeg" width="320" alt="Good — content" />
-    </td>
-    <td align="center"><b>Style</b><br>
-      <img src="docs/examples/good/style.jpeg" width="320" alt="Good — style" />
-    </td>
-  </tr>
+<tr>
+<td align="center"><b>Content</b><br>
+<img src="docs/examples/good/content.jpeg" width="320" alt="Good — content" />
+</td>
+<td align="center"><b>Style</b><br>
+<img src="docs/examples/good/style.jpeg" width="320" alt="Good — style" />
+</td>
+</tr>
 </table>
 
 **Result**
 
 <p align="center">
-  <img src="docs/examples/good/result.png" width="320" alt="Good — result" />
+<img src="docs/examples/good/result.png" width="320" alt="Good — result" />
 </p>
 
 **Morph animation (GIF)**
 
 <p align="center">
-  <img src="docs/examples/good/morph.gif" width="320" alt="Good — morph animation" />
+<img src="docs/examples/good/morph.gif" width="320" alt="Good — morph animation" />
 </p>
+
 
 *Caption: Style pixels rearrange toward content structure; colors and textures from the style remain plausible.*
 
@@ -154,28 +157,30 @@ Main window (load Content / Style, parameters, Run, play morph).
 
 **When this fails:** Image pairs with **different structure** (e.g., face as content + landscape as style), **high-frequency or random** style textures, or TV weight set too low.
 
+
 <table>
-  <tr>
-    <td align="center"><b>Content</b><br>
-      <img src="docs/examples/bad/content.jpg" width="320" alt="Bad — content" />
-    </td>
-    <td align="center"><b>Style</b><br>
-      <img src="docs/examples/bad/style.jpeg" width="320" alt="Bad — style" />
-    </td>
-  </tr>
+<tr>
+<td align="center"><b>Content</b><br>
+<img src="docs/examples/bad/content2.jpg" width="320" alt="Bad — content" />
+</td>
+<td align="center"><b>Style</b><br>
+<img src="docs/examples/bad/style2.jpeg" width="320" alt="Bad — style" />
+</td>
+</tr>
 </table>
 
 **Result**
 
 <p align="center">
-  <img src="docs/examples/bad/result.jpeg" width="320" alt="Bad — result" />
+<img src="docs/examples/bad/result.png" width="320" alt="Bad — result" />
 </p>
 
 **Morph animation (GIF)**
 
 <p align="center">
-  <img src="docs/examples/bad/morph.gif" width="320" alt="Bad — morph animation" />
+<img src="docs/examples/bad/morph.gif" width="320" alt="Bad — morph animation" />
 </p>
+
 
 *Caption: Tearing, ghosting, or loss of recognizable structure — method limits are visible.*
 
@@ -215,18 +220,18 @@ Main window (load Content / Style, parameters, Run, play morph).
 
 **O. Zamzam**, “PixelShuffler: A Simple Image Translation through Pixel Rearrangement,” in *2025 IEEE International Conference on Image Processing (ICIP)*, Anchorage, AK, USA, 2025, pp. 1360–1365.
 
-- **IEEE Xplore:** https://ieeexplore.ieee.org/document/11084515  
-- **Preprint:** https://arxiv.org/abs/2410.03021  
+- **IEEE Xplore:** https://ieeexplore.ieee.org/document/11084515
+- **Preprint:** https://arxiv.org/abs/2410.03021
 
 ```bibtex
 @inproceedings{zamzam2025pixelshuffler,
-  author       = {Zamzam, Omar},
-  title        = {{PixelShuffler}: A Simple Image Translation through Pixel Rearrangement},
-  booktitle    = {2025 IEEE International Conference on Image Processing (ICIP)},
-  pages        = {1360--1365},
-  year         = {2025},
-  organization = {IEEE},
-  url          = {https://ieeexplore.ieee.org/document/11084515}
+author = {Zamzam, Omar},
+title = {{PixelShuffler}: A Simple Image Translation through Pixel Rearrangement},
+booktitle = {2025 IEEE International Conference on Image Processing (ICIP)},
+pages = {1360--1365},
+year = {2025},
+organization = {IEEE},
+url = {https://ieeexplore.ieee.org/document/11084515}
 }
 ```
 
@@ -246,14 +251,14 @@ Main window (load Content / Style, parameters, Run, play morph).
 ```bash
 cd "Computer Vision Project"
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
 ```
 
-1. Click **Content** and **Style** to load images.  
-2. Choose a quality preset or adjust weights / iterations.  
-3. **Run Pixel Shuffler** → watch preview.  
+1. Click **Content** and **Style** to load images.
+2. Choose a quality preset or adjust weights / iterations.
+3. **Run Pixel Shuffler** → watch preview.
 4. **Play morph** or export GIF / jpeg.
 
 **CLI (optional):**
@@ -271,18 +276,17 @@ Outputs: `output/` (gitignored).
 ## Project structure
 
 ```
-├── main.py                 # PyQt6 desktop app
-├── cli.py                  # Headless training
+├── main.py # PyQt6 desktop app
+├── cli.py # Headless training
 ├── requirements.txt
-├── assets/                 # Sample inputs
+├── assets/ # Sample inputs
 ├── docs/
-│   ├── screenshots/        # ← UI screenshot (app_main.jpeg)
-│   └── examples/           # ← good/, bad/, … (content, style, result, morph.gif)
+│ ├── screenshots/ # ← UI screenshot (app_main.jpeg)
+│ └── examples/ # ← good/, bad/, … (content, style, result, morph.gif)
 └── pixel_shuffler/
-    ├── model.py
-    ├── losses.py
-    ├── engine.py
-    ├── morph.py
-    └── io_utils.py
+├── model.py
+├── losses.py
+├── engine.py
+├── morph.py
+└── io_utils.py
 ```
-
