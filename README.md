@@ -113,9 +113,9 @@ This coursework project pursues the **same high-level goal** (structure from con
 
 Main window (load Content / Style, parameters, Run, play morph).
 
-<p align="center">
-<img src="docs/screenshots/app_main.jpeg" width="320" alt="Application main window" />
-</p>
+
+<img src="docs/screenshots/app_main.jpeg"  alt="Application main window" />
+
 
 *Caption: Pixel Shuffler desktop UI — content & style inputs, live preview, morph controls.*
 
