@@ -203,7 +203,7 @@ Main window (load Content / Style, parameters, Run, play morph).
 3. **Low TV weight** — Reducing TV causes visible grid artifacts and discontinuities in the warp.
 4. **Compute cost** — Hundreds–thousands of iterations per pair; CPU-only runs are slow; the first run downloads LPIPS/VGG weights.
 5. **Fixed crop size** — Center crop to 256×256 drops context; off-center subjects may fail.
-6. **Not the official paper code** — This repo is an educational PyTorch reimplementation (U-Net + LPIPS + VGG Gram), not [OmarSZamzam/PixelShuffler](https://github.com/OmarSZamzam/PixelShuffler); results may differ from the IEEE paper.
+
 
 ### Summary
 
