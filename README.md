@@ -1,4 +1,4 @@
-# Pixel Shuffler — Image Translation Desktop Application
+[# Pixel Shuffler — Image Translation Desktop Application
 
 Implementation inspired by the ICIP 2025 paper [*PixelShuffler: A Simple Image Translation through Pixel Rearrangement*](https://ieeexplore.ieee.org/document/11084515).
 PyQt6 desktop app: load **content** (structure) + **style** (appearance) → optimize a deformation field → preview result and **morph animation**.
@@ -290,3 +290,4 @@ Outputs: `output/` (gitignored).
 ├── morph.py
 └── io_utils.py
 ```
+](https://github.com/Tsyren03/PixelMorph-Animator)
