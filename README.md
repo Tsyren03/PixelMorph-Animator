@@ -139,13 +139,13 @@ Main window (load Content / Style, parameters, Run, play morph).
 **Result**
 
 <p align="center">
-<img src="docs/examples/good/result.png" width="320" alt="Good — result" />
+<img src="docs/examples/good/result.png" alt="Good — result" />
 </p>
 
 **Morph animation (GIF)**
 
 <p align="center">
-<img src="docs/examples/good/morph.gif" width="320" alt="Good — morph animation" />
+<img src="docs/examples/good/morph.gif" alt="Good — morph animation" />
 </p>
 
 
@@ -172,13 +172,13 @@ Main window (load Content / Style, parameters, Run, play morph).
 **Result**
 
 <p align="center">
-<img src="docs/examples/bad/result.png" width="320" alt="Bad — result" />
+<img src="docs/examples/bad/result.png"  alt="Bad — result" />
 </p>
 
 **Morph animation (GIF)**
 
 <p align="center">
-<img src="docs/examples/bad/morph.gif" width="320" alt="Bad — morph animation" />
+<img src="docs/examples/bad/morph.gif"  alt="Bad — morph animation" />
 </p>
 
 
